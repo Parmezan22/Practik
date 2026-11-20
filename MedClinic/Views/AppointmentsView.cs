@@ -532,6 +532,13 @@ namespace MedClinic.Views
         /// <summary>Печать талона на приём по выбранной записи с предварительным просмотром.</summary>
         private void btnTicket_Click(object sender, EventArgs e)
         {
+            if (_user == null || _user.Role == UserRole.Guest)
+            {
+                MessageBox.Show("Печать талона доступна клиенту, менеджеру и администратору.",
+                    "Доступ ограничен", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
             var appointment = SelectedAppointment;
             if (appointment == null)
             {
