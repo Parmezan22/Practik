@@ -404,6 +404,43 @@ SELECT COUNT(*)
             Log.Warning("Удалена запись Id={AppointmentId}", appointmentId);
         }
 
+        /// <summary>
+        /// Занятые интервалы врача на дату (кроме отменённых записей) в минутах от 00:00.
+        /// Длительность записи - сумма длительностей основной и дополнительных услуг,
+        /// как в проверке пересечений. Нужны для подбора времени (ScheduleOptimizer).
+        /// </summary>
+        public List<TimeWindow> GetBusyIntervals(int doctorId, DateTime date)
+        {
+            using (var db = Database.Open())
+            {
+                return db.Query<TimeWindow>(@"
+SELECT t.StartMinute AS StartMinute,
+       t.StartMinute + t.Duration AS EndMinute
+  FROM (SELECT (CAST(substr(a.Time, 1, 2) AS INTEGER) * 60 + CAST(substr(a.Time, 4, 2) AS INTEGER)) AS StartMinute,
+               (CASE WHEN s.Duration > 0 THEN s.Duration ELSE 30 END
+                + IFNULL(extra.ExtraDuration, 0)) AS Duration
+          FROM Appointments a
+          JOIN Services s ON s.Id = a.ServiceId
+          LEFT JOIN (
+                SELECT aps.AppointmentId,
+                       SUM(CASE WHEN s2.Duration > 0 THEN s2.Duration ELSE 30 END) AS ExtraDuration
+                  FROM AppointmentServices aps
+                  JOIN Services s2 ON s2.Id = aps.ServiceId
+                 GROUP BY aps.AppointmentId
+          ) extra ON extra.AppointmentId = a.Id
+         WHERE a.DoctorId = @doctorId
+           AND a.Date     = @dateText
+           AND a.Status  <> @cancelled) t
+ ORDER BY t.StartMinute;",
+                    new
+                    {
+                        doctorId,
+                        dateText = date.ToString("yyyy-MM-dd"),
+                        cancelled = EnumText.StatusToDb(AppointmentStatus.Cancelled)
+                    }).AsList();
+            }
+        }
+
         // ------------------------- СЧЁТЧИКИ И СТАТИСТИКА -------------------------
 
         /// <summary>

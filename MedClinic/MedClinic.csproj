@@ -147,8 +147,10 @@
     <Compile Include="Services\PasswordHasher.cs" />
     <Compile Include="Services\Permissions.cs" />
     <Compile Include="Services\ReportPrinter.cs" />
+    <Compile Include="Services\ScheduleOptimizer.cs" />
     <Compile Include="Services\Session.cs" />
     <Compile Include="Services\StatisticsService.cs" />
+    <Compile Include="Services\TicketPrinter.cs" />
     <Compile Include="Services\TimeRange.cs" />
     <Compile Include="Services\Validation.cs" />
     <Compile Include="UI\PlaceholderHelper.cs" />

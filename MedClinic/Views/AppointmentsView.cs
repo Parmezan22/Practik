@@ -38,6 +38,7 @@ namespace MedClinic.Views
         public AppointmentsView()
         {
             InitializeComponent();
+            CreateTicketButton();
 
             _initializingFilters = true;
 
@@ -511,6 +512,57 @@ namespace MedClinic.Views
         private void btnComplete_Click(object sender, EventArgs e)
         {
             CompleteSelected();
+        }
+
+        // ------------------------------ ТАЛОН (МОДУЛЬ Г) ------------------------------
+
+        /// <summary>Кнопка «Талон» справа от «Обновить».</summary>
+        private void CreateTicketButton()
+        {
+            var button = new Button
+            {
+                Text = "Талон",
+                Location = new System.Drawing.Point(btnRefresh.Right + 10, btnRefresh.Top),
+                Size = new System.Drawing.Size(120, btnRefresh.Height)
+            };
+            button.Click += btnTicket_Click;
+            panelTools.Controls.Add(button);
+        }
+
+        /// <summary>Печать талона на приём по выбранной записи с предварительным просмотром.</summary>
+        private void btnTicket_Click(object sender, EventArgs e)
+        {
+            var appointment = SelectedAppointment;
+            if (appointment == null)
+            {
+                MessageBox.Show("Выберите запись в таблице.", "Нет выбора",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            if (appointment.Status == AppointmentStatus.Cancelled)
+            {
+                MessageBox.Show("Запись отменена, талон по ней не печатается.", "Талон",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            try
+            {
+                var doctor = new DoctorRepository().GetById(appointment.DoctorId);
+                var services = _repository.GetServices(appointment.Id);
+                var lines = TicketPrinter.BuildLines(appointment, doctor, services,
+                    AppConfig.Current.Application.ClinicName);
+
+                Log.Information("Печать талона по записи Id={Id}", appointment.Id);
+                TicketPrinter.ShowPreview(FindForm(), lines);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Ошибка печати талона Id={Id}", appointment.Id);
+                MessageBox.Show("Не удалось сформировать талон.\n\n" + ex.Message,
+                    "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private void CompleteSelected()

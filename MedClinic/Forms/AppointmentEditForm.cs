@@ -42,8 +42,97 @@ namespace MedClinic.Forms
             LoadDoctors();
             LoadServices();
             LoadTimeSlots();
+            CreateSuggestButton();
 
             UpdateTotals();
+        }
+
+        // --------------------------- ПОДБОР ВРЕМЕНИ (МОДУЛЬ В) ---------------------------
+
+        /// <summary>Кнопка «Подобрать время» справа от списка времени.</summary>
+        private void CreateSuggestButton()
+        {
+            var button = new Button
+            {
+                Text = "Подобрать время",
+                Location = new Point(cmbTime.Right + 10, cmbTime.Top - 2),
+                Size = new Size(150, cmbTime.Height + 4),
+                TabIndex = cmbTime.TabIndex + 1
+            };
+            button.Click += btnSuggest_Click;
+            cmbTime.Parent.Controls.Add(button);
+            button.BringToFront();
+        }
+
+        /// <summary>
+        /// Ставит приём в самое короткое свободное окно врача, куда помещается
+        /// длительность выбранных услуг (ScheduleOptimizer.BestFit).
+        /// </summary>
+        private void btnSuggest_Click(object sender, EventArgs e)
+        {
+            var doctor = cmbDoctor.SelectedItem as Doctor;
+            if (doctor == null)
+            {
+                MessageBox.Show("Сначала выберите врача.", "Подбор времени",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            decimal sum;
+            int minutes;
+            CalculateSelection(out sum, out minutes);
+
+            var date = dtpDate.Value.Date;
+            var notBefore = ScheduleOptimizer.WorkStart;
+            if (date == DateTime.Today)
+                notBefore = Math.Max(notBefore, (int)DateTime.Now.TimeOfDay.TotalMinutes + 1);
+
+            try
+            {
+                var busy = _appointmentRepository.GetBusyIntervals(doctor.Id, date);
+                var slot = ScheduleOptimizer.BestFit(busy, minutes, notBefore);
+
+                if (slot == null)
+                {
+                    MessageBox.Show("На " + date.ToString("dd.MM.yyyy") + " у врача нет свободного окна на " +
+                                    minutes + " мин. Выберите другой день или другого врача.",
+                        "Подбор времени", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                SelectTime(slot.StartText);
+
+                var load = ScheduleOptimizer.Utilization(busy, ScheduleOptimizer.WorkStart, ScheduleOptimizer.WorkEnd);
+                Log.Information("Подбор времени: врач {DoctorId}, {Date:dd.MM.yyyy}, {Minutes} мин -> {Slot}, окно {Window}",
+                    doctor.Id, date, minutes, slot.ToString(), slot.Window.ToString());
+
+                MessageBox.Show("Предложено время " + slot + ".\n" +
+                                "Это самое короткое свободное окно (" + slot.Window + "), " +
+                                "в которое помещается приём на " + minutes + " мин.\n" +
+                                "Загрузка врача в этот день: " + (load * 100).ToString("N0") + " %.",
+                    "Подбор времени", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Ошибка подбора времени для врача Id={DoctorId}", doctor.Id);
+                MessageBox.Show("Не удалось подобрать время.\n\n" + ex.Message,
+                    "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        /// <summary>Выбирает время в списке, при необходимости добавляя его по порядку.</summary>
+        private void SelectTime(string time)
+        {
+            if (!cmbTime.Items.Contains(time))
+            {
+                var index = 0;
+                while (index < cmbTime.Items.Count &&
+                       string.CompareOrdinal(Convert.ToString(cmbTime.Items[index]), time) < 0)
+                    index++;
+                cmbTime.Items.Insert(index, time);
+            }
+
+            cmbTime.SelectedItem = time;
         }
 
         // --------------------------- ЗАПОЛНЕНИЕ СПИСКОВ ---------------------------
